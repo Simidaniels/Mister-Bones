@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-// Initialize Resend with API key from environment
-const resend = new Resend(process.env.RESEND_API_KEY!);
-
 interface ContactForm {
   name: string;
   email: string;
@@ -12,14 +9,23 @@ interface ContactForm {
 
 export async function POST(req: Request) {
   try {
+    // Ensure all required env variables are set
+    const { RESEND_API_KEY, FROM_EMAIL, TO_EMAIL } = process.env;
+    if (!RESEND_API_KEY || !FROM_EMAIL || !TO_EMAIL) {
+      console.error("Missing Resend API key or email addresses.");
+      return NextResponse.json({ message: "Server misconfiguration." }, { status: 500 });
+    }
+
+    const resend = new Resend(RESEND_API_KEY);
+
     const { name, email, message }: ContactForm = await req.json();
 
     // Send emails concurrently
     await Promise.all([
       // Email to site owner
       resend.emails.send({
-        from: process.env.FROM_EMAIL!,
-        to: process.env.TO_EMAIL!,
+        from: FROM_EMAIL,
+        to: TO_EMAIL,
         subject: `New message from ${name}`,
         html: `
           <h2>New Contact Message</h2>
@@ -31,7 +37,7 @@ export async function POST(req: Request) {
 
       // Auto-reply to user
       resend.emails.send({
-        from: process.env.FROM_EMAIL!,
+        from: FROM_EMAIL,
         to: email,
         subject: "Mister Bones – We received your message!",
         html: `
@@ -45,6 +51,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Message sent successfully!" });
   } catch (error) {
     console.error("Error sending contact form email:", error);
-    return NextResponse.json({ message: "Failed to send message." });
+    return NextResponse.json({ message: "Failed to send message." }, { status: 500 });
   }
 }
